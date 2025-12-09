@@ -29,7 +29,7 @@ const Navbar = () => {
             {/* User Profile */}
             <div className="flex items-center space-x-3">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-800">John Doe</p>
+                <p className="text-sm font-medium text-gray-800">Phuoc Bao</p>
                 <p className="text-xs text-gray-500">Premium Member</p>
               </div>
               <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">

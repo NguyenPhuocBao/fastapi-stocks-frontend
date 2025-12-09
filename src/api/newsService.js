@@ -59,5 +59,40 @@ export const newsService = {
       console.error('❌ Sentiment API Error:', error.message);
       return { sentiment: 'Neutral', positive: 50, negative: 30, neutral: 20 };
     }
+  },
+  getStockNews: async (symbol, limit = 5) => {
+    try {
+      console.log(`📰 Fetching news for ${symbol}...`);
+      
+      // Mock data for now
+      const mockNews = [
+        {
+          id: 1,
+          title: `${symbol} reports strong quarterly earnings`,
+          source: 'Financial Times',
+          timeAgo: '2 hours ago',
+          sentiment: 'positive'
+        },
+        {
+          id: 2,
+          title: `Analysts raise price target for ${symbol}`,
+          source: 'Bloomberg',
+          timeAgo: '5 hours ago',
+          sentiment: 'positive'
+        },
+        {
+          id: 3,
+          title: `${symbol} expands operations in new markets`,
+          source: 'Reuters',
+          timeAgo: '1 day ago',
+          sentiment: 'positive'
+        }
+      ];
+      
+      return mockNews.slice(0, limit);
+    } catch (error) {
+      console.error('❌ Stock News API Error:', error.message);
+      return [];
+    }
   }
 };

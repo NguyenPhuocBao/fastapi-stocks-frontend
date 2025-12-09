@@ -1,7 +1,8 @@
-// src/pages/Dashboard.jsx - PHẦN QUAN TRỌNG
-import React, { useState, useEffect } from 'react';
+// src/pages/Dashboard.jsx - ĐÃ CẢI THIỆN VỚI PHÂN TRANG
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { stockService } from '../api/stockService';
+import { useNavigate } from 'react-router-dom'; 
 import { newsService } from '../api/newsService';
 import { 
   ArrowTrendingUpIcon,
@@ -11,10 +12,21 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   NewspaperIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ArrowsUpDownIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  // State cho phân trang và sắp xếp
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
+
   // Fetch stocks data
   const { 
     data: stocks = [], 
@@ -65,6 +77,73 @@ const Dashboard = () => {
       console.log('Sample news:', news[0]);
     }
   }, [stocks, news]);
+
+  // Lọc stocks dựa trên search term
+  const filteredStocks = useMemo(() => {
+    if (!searchTerm) return stocks;
+    
+    return stocks.filter(stock => 
+      stock.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      stock.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [stocks, searchTerm]);
+
+  // Sắp xếp stocks
+  const sortedStocks = useMemo(() => {
+    const sortableStocks = [...filteredStocks];
+    
+    if (sortConfig.key) {
+      sortableStocks.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+        
+        // Xử lý các trường đặc biệt
+        if (sortConfig.key === 'changePercent' || sortConfig.key === 'change') {
+          aValue = parseFloat(aValue) || 0;
+          bValue = parseFloat(bValue) || 0;
+        }
+        
+        if (sortConfig.key === 'volume') {
+          aValue = parseInt(aValue) || 0;
+          bValue = parseInt(bValue) || 0;
+        }
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    
+    return sortableStocks;
+  }, [filteredStocks, sortConfig]);
+
+  // Tính toán phân trang
+  const paginatedStocks = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return sortedStocks.slice(startIndex, endIndex);
+  }, [sortedStocks, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(sortedStocks.length / itemsPerPage);
+
+  // Xử lý sắp xếp
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Xử lý thay đổi số lượng items per page
+  const handleItemsPerPageChange = (e) => {
+    setItemsPerPage(Number(e.target.value));
+    setCurrentPage(1); // Reset về trang đầu tiên
+  };
 
   // Calculate stats từ data thực - FIXED
   const calculateStats = () => {
@@ -171,6 +250,7 @@ const Dashboard = () => {
     }
   ];
 
+  // Hiển thị loading
   if (stocksLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -182,6 +262,7 @@ const Dashboard = () => {
     );
   }
 
+  // Hiển thị lỗi
   if (stocksError) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
@@ -239,41 +320,133 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Stocks Table với data thực - FIXED */}
+      {/* Stocks Table với data thực và phân trang */}
       <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h2 className="text-xl font-bold text-gray-800">Live Stock Prices</h2>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{stocks.length} stocks</span>
-            {stocks.length === 0 && (
-              <span className="text-sm text-yellow-600 flex items-center">
-                <ExclamationTriangleIcon className="h-4 w-4 mr-1" />
-                No data available
-              </span>
-            )}
+          
+          {/* Search và controls */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+            {/* Search box */}
+            <div className="relative w-full sm:w-64">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by symbol or name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            {/* Items per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Show</span>
+              <select
+                value={itemsPerPage}
+                onChange={handleItemsPerPageChange}
+                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+              >
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span className="text-sm text-gray-600">items</span>
+            </div>
           </div>
         </div>
         
-        {stocks.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No stock data available. Please check backend connection.</p>
+        {/* Thông tin kết quả */}
+        <div className="flex justify-between items-center mb-4 text-sm text-gray-600">
+          <div>
+            Showing {paginatedStocks.length} of {sortedStocks.length} stocks
+            {searchTerm && (
+              <span className="ml-2 text-blue-600">
+                (filtered by "{searchTerm}")
+              </span>
+            )}
+          </div>
+          {sortedStocks.length > 0 && (
+            <div className="text-xs bg-gray-100 px-2 py-1 rounded">
+              Sorted by: {sortConfig.key} ({sortConfig.direction})
+            </div>
+          )}
+        </div>
+        
+        {sortedStocks.length === 0 ? (
+          <div className="text-center py-12 border border-gray-200 rounded-lg">
+            <ExclamationTriangleIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">
+              {searchTerm ? `No stocks found for "${searchTerm}"` : 'No stock data available'}
+            </p>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="mt-2 text-blue-600 hover:text-blue-800"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead>
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Change</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trend</th>
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('symbol')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Symbol
+                        <ArrowsUpDownIcon className="h-4 w-4" />
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('price')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Price
+                        <ArrowsUpDownIcon className="h-4 w-4" />
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('changePercent')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Change %
+                        <ArrowsUpDownIcon className="h-4 w-4" />
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('volume')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Volume
+                        <ArrowsUpDownIcon className="h-4 w-4" />
+                      </div>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Trend
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {stocks.slice(0, 10).map((stock) => {
-                    // FIX: Kiểm tra null values
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedStocks.map((stock) => {
                     const price = stock.price || stock.close || 0;
                     const change = stock.change || 0;
                     const changePercent = stock.changePercent || 0;
@@ -281,14 +454,21 @@ const Dashboard = () => {
                     const trend = stock.trend || (change > 0 ? 'up' : change < 0 ? 'down' : 'neutral');
                     
                     return (
-                      <tr key={stock.symbol} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-gray-800">{stock.symbol}</div>
+                      <tr key={stock.symbol} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="font-bold text-gray-800">{stock.symbol}</div>
+                            {stock.name && (
+                              <div className="text-sm text-gray-500 truncate max-w-xs">
+                                {stock.name}
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-bold text-lg">${price.toFixed(2)}</div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className={`flex items-center ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
                             {trend === 'up' ? (
                               <ArrowUpIcon className="h-4 w-4 mr-1" />
@@ -303,18 +483,18 @@ const Dashboard = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-gray-600">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-gray-600 font-medium">
                             {volume.toLocaleString()}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                             trend === 'up' ? 'bg-green-100 text-green-800' :
                             trend === 'down' ? 'bg-red-100 text-red-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {trend}
+                            {trend.charAt(0).toUpperCase() + trend.slice(1)}
                           </div>
                         </td>
                       </tr>
@@ -324,13 +504,125 @@ const Dashboard = () => {
               </table>
             </div>
             
-            {stocks.length > 10 && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-500">
-                  Showing 10 of {stocks.length} stocks
-                </p>
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-200 gap-4">
+              <div className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages} • {sortedStocks.length} total items
               </div>
-            )}
+              
+              <div className="flex items-center gap-2">
+                {/* First page button */}
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  First
+                </button>
+                
+                {/* Previous page button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`p-2 rounded-md ${
+                    currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <ChevronLeftIcon className="h-5 w-5" />
+                </button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    if (pageNum > totalPages || pageNum < 1) return null;
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <>
+                      <span className="px-1">...</span>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        className="px-3 py-1 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                {/* Next page button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`p-2 rounded-md ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <ChevronRightIcon className="h-5 w-5" />
+                </button>
+                
+                {/* Last page button */}
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Last
+                </button>
+              </div>
+              
+              {/* Items per page */}
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-600">Items per page:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={handleItemsPerPageChange}
+                  className="border border-gray-300 rounded-md px-2 py-1"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -419,21 +711,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Debug Section (optional) */}
-      <details className="bg-gray-50 rounded-lg p-4">
-        <summary className="font-medium text-gray-700 cursor-pointer">Debug Information</summary>
-        <div className="mt-2 text-sm">
-          <p>Stocks loaded: {stocks.length}</p>
-          <p>News loaded: {news.length}</p>
-          <p>Sentiment: {JSON.stringify(sentiment)}</p>
-          {stocks.length > 0 && (
-            <pre className="bg-gray-800 text-white p-2 rounded mt-2 overflow-auto text-xs">
-              First stock: {JSON.stringify(stocks[0], null, 2)}
-            </pre>
-          )}
-        </div>
-      </details>
     </div>
   );
 };

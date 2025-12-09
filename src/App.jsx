@@ -7,6 +7,7 @@ import Market from './pages/Market';
 import StockDetail from './pages/StockDetail';
 import Navbar from './components/Layout/Navbar';
 import Sidebar from './components/Layout/Sidebar';
+import AIAnalysis from './pages/AIAnalysis'; 
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
@@ -40,6 +41,10 @@ function App() {
               isAuthenticated ? <Navigate to="/dashboard" /> : <Navigate to="/login" />
             } />
           </Routes>
+
+          
+
+          
         </main>
       </div>
     </div>
