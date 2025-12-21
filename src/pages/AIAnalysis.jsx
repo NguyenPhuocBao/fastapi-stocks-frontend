@@ -1,113 +1,101 @@
-// src/pages/AIAnalysis.jsx - SỬA LỖI IMPORTS
-import React, { useState } from 'react'; // Xóa useEffect và useRef không dùng
+// src/pages/AIAnalysis.jsx - ĐÃ SỬA LỖI IMPORTS
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ChartBarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   ShieldCheckIcon,
   CpuChipIcon,
-  BoltIcon,
   BeakerIcon,
-  ClockIcon,
   ChartPieIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  ArrowsRightLeftIcon,
   CalculatorIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  ArrowPathIcon // THÊM Icon này
+  ArrowPathIcon,
+  NewspaperIcon
 } from '@heroicons/react/24/outline';
+
+const API_BASE_URL = 'http://localhost:8003';
 
 const AIAnalysis = () => {
   const [activeTab, setActiveTab] = useState('predictions');
-  const [selectedStock, setSelectedStock] = useState('VNM');
+  const [selectedStock, setSelectedStock] = useState('');
   const [timeframe, setTimeframe] = useState('1D');
   const [showModelDetails, setShowModelDetails] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [stockPredictions, setStockPredictions] = useState([]);
   
-  // Danh sách cổ phiếu
-  const stocks = [
-    { symbol: 'VNM', name: 'Vinamilk', price: 75.50, change: 1.23 },
-    { symbol: 'FPT', name: 'FPT Corp', price: 120.25, change: 2.50 },
-    { symbol: 'HPG', name: 'Hoa Phat', price: 62.40, change: 1.20 },
-    { symbol: 'VCB', name: 'Vietcombank', price: 95.80, change: 0.80 },
-    { symbol: 'SSI', name: 'SSI Securities', price: 45.30, change: -0.30 },
-    { symbol: 'MWG', name: 'Mobile World', price: 68.90, change: 1.80 },
-  ];
+  // Fetch AI Analysis data với useCallback để tránh dependency warning
+  const fetchAiAnalysis = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch latest analysis
+      const response = await fetch(`${API_BASE_URL}/api/ai/latest?include_predictions=true`);
+      const result = await response.json();
+      
+      if (result.success && result.data.length > 0) {
+        const analysis = result.data[0];
+        setAiAnalysis(analysis);
+        
+        // Get detailed analysis for predictions
+        const detailResponse = await fetch(`${API_BASE_URL}/api/ai/date/${analysis.analysis_date}`);
+        const detailResult = await detailResponse.json();
+        
+        if (detailResult.success) {
+          const predictions = detailResult.data.predictions || [];
+          setStockPredictions(predictions);
+          
+          // Set initial selected stock
+          if (predictions.length > 0 && !selectedStock) {
+            setSelectedStock(predictions[0].symbol);
+          }
+        }
+      } else {
+        setError('No AI analysis data available');
+      }
+      
+    } catch (err) {
+      console.error('Error fetching AI analysis:', err);
+      setError('Failed to load AI analysis data. Please check API connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedStock]);
 
-  // Dữ liệu mẫu
-  const predictions = [
-    {
-      symbol: 'VNM',
-      current_price: 75.50,
-      predicted_price: 76.80,
-      prediction_change: 1.72,
-      prediction_trend: 'up',
-      confidence: 88,
-      model: 'lstm',
-      timestamp: new Date().toISOString(),
-    },
-    {
-      symbol: 'FPT',
-      current_price: 120.25,
-      predicted_price: 122.80,
-      prediction_change: 2.12,
-      prediction_trend: 'up',
-      confidence: 85,
-      model: 'xgboost',
-      timestamp: new Date().toISOString(),
-    },
-    {
-      symbol: 'HPG',
-      current_price: 62.40,
-      predicted_price: 61.20,
-      prediction_change: -1.92,
-      prediction_trend: 'down',
-      confidence: 79,
-      model: 'lstm',
-      timestamp: new Date().toISOString(),
-    },
-  ];
+  useEffect(() => {
+    fetchAiAnalysis();
+    
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(fetchAiAnalysis, 300000);
+    return () => clearInterval(interval);
+  }, [fetchAiAnalysis]);
 
-  const stockPrediction = predictions.find(p => p.symbol === selectedStock) || {};
+  // Get selected stock prediction
+  const selectedStockData = stockPredictions.find(p => p.symbol === selectedStock);
+  
+  // Get top performers (sorted by predicted_change)
+  const topPerformers = [...stockPredictions]
+    .sort((a, b) => b.predicted_change - a.predicted_change)
+    .slice(0, 6);
 
-  const modelMetrics = {
-    accuracy: 87.5,
-    rmse: 2.34,
-    auc_roc: 0.89,
-    mae: 1.87,
-  };
+  // Get risk alerts from aiAnalysis
+  const riskAlerts = aiAnalysis?.risk_warnings || [];
 
-  const alerts = [
-    {
-      id: 1,
-      symbol: 'VNM',
-      type: 'price_surge',
-      title: 'Giá tăng mạnh dự đoán',
-      message: 'AI dự đoán VNM tăng 1.7% trong 24h tới với độ tin cậy 88%',
-      severity: 'medium',
-      confidence: 88,
-      timestamp: new Date(Date.now() - 30 * 60000).toISOString(),
-    },
-    {
-      id: 2,
-      symbol: 'SSI',
-      type: 'high_volatility',
-      title: 'Biến động cao',
-      message: 'Phát hiện biến động bất thường, chênh lệch dự đoán >2.5%',
-      severity: 'high',
-      confidence: 91,
-      timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
-    },
-  ];
-
+  // Tabs
   const tabs = [
     { id: 'predictions', name: 'Dự Đoán AI', icon: ChartBarIcon },
     { id: 'portfolio', name: 'Đề Xuất Đầu Tư', icon: ChartPieIcon },
     { id: 'alerts', name: 'Cảnh Báo', icon: ExclamationTriangleIcon },
-    { id: 'models', name: 'Mô Hình AI', icon: CpuChipIcon },
+    { id: 'news', name: 'Tin Tức', icon: NewspaperIcon },
   ];
 
+  // Timeframes
   const timeframes = [
     { id: '1H', name: '1 Giờ' },
     { id: '1D', name: '1 Ngày' },
@@ -115,37 +103,146 @@ const AIAnalysis = () => {
     { id: '1M', name: '1 Tháng' },
   ];
 
-  // XÓA HÀM formatNumber KHÔNG DÙNG
-  // const formatNumber = (num) => {
-  //   if (num >= 1000000000) return `${(num / 1000000000).toFixed(2)}B`;
-  //   if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
-  //   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  //   return num?.toFixed(2) || '0';
-  // };
+  // Format currency
+  const formatCurrency = (value) => {
+    if (!value) return '$0.00';
+    return '$' + parseFloat(value).toFixed(2);
+  };
+
+  // Format percentage
+  const formatPercent = (value) => {
+    if (!value) return '0.00%';
+    const num = parseFloat(value);
+    return (num > 0 ? '+' : '') + num.toFixed(2) + '%';
+  };
+
+  // Get trend class
+  const getTrendClass = (trend) => {
+    if (trend === 'up') return 'trend-up';
+    if (trend === 'down') return 'trend-down';
+    return 'trend-neutral';
+  };
+
+  // Get recommendation class
+  const getRecommendationClass = (predictedChange) => {
+    if (predictedChange > 2) return 'buy';
+    if (predictedChange > 0) return 'hold';
+    return 'sell';
+  };
+
+  // Calculate confidence score
+  const calculateConfidence = (change) => {
+    return Math.min(Math.abs(change) * 15, 95);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <ArrowPathIcon className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Đang tải dữ liệu phân tích AI...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <ExclamationTriangleIcon className="h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-900 font-medium mb-2">Lỗi tải dữ liệu</p>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchAiAnalysis}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Phân Tích & Dự Đoán</h1>
-          <p className="text-gray-600">Dự đoán xu hướng giá và cảnh báo biến động bằng AI</p>
+          <h1 className="text-3xl font-bold text-gray-900">AI Phân Tích & Dự Đoán Chứng Khoán</h1>
+          <p className="text-gray-600">Dự đoán xu hướng giá bằng AI thời gian thực</p>
           <div className="flex items-center gap-4 mt-3">
             <div className="flex items-center">
-              <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
-              <span className="text-sm text-gray-600">Mô hình đang hoạt động</span>
+              <div className={`h-2 w-2 rounded-full mr-2 ${
+                aiAnalysis?.market_trend === 'up' ? 'bg-green-500' :
+                aiAnalysis?.market_trend === 'down' ? 'bg-red-500' :
+                'bg-yellow-500'
+              }`}></div>
+              <span className="text-sm text-gray-600">
+                Xu hướng: <span className={`font-medium ${getTrendClass(aiAnalysis?.market_trend)}`}>
+                  {aiAnalysis?.market_trend === 'up' ? 'TĂNG' :
+                   aiAnalysis?.market_trend === 'down' ? 'GIẢM' :
+                   'ỔN ĐỊNH'}
+                </span>
+              </span>
             </div>
             <div className="text-sm text-gray-500">
-              Cập nhật: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Cập nhật: {aiAnalysis?.time_ago || 'Vừa xong'}
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
-          <button className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium flex items-center">
+          <button
+            onClick={fetchAiAnalysis}
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium flex items-center"
+          >
             <ArrowPathIcon className="h-4 w-4 mr-2" />
-            Cập nhật dự đoán
+            Cập nhật dữ liệu
           </button>
+        </div>
+      </div>
+
+      {/* Market Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+          <div className="flex items-center">
+            <ArrowTrendingUpIcon className="h-8 w-8 text-green-600 mr-3" />
+            <div>
+              <div className="text-sm text-gray-600">Cổ phiếu tăng điểm</div>
+              <div className="text-2xl font-bold text-gray-900">{aiAnalysis?.bullish_count || 0}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
+          <div className="flex items-center">
+            <ArrowTrendingDownIcon className="h-8 w-8 text-red-600 mr-3" />
+            <div>
+              <div className="text-sm text-gray-600">Cổ phiếu giảm điểm</div>
+              <div className="text-2xl font-bold text-gray-900">{aiAnalysis?.bearish_count || 0}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+          <div className="flex items-center">
+            <ShieldCheckIcon className="h-8 w-8 text-blue-600 mr-3" />
+            <div>
+              <div className="text-sm text-gray-600">Độ tin cậy AI</div>
+              <div className="text-2xl font-bold text-gray-900">{aiAnalysis?.confidence_score || 0}%</div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+          <div className="flex items-center">
+            <ChartBarIcon className="h-8 w-8 text-purple-600 mr-3" />
+            <div>
+              <div className="text-sm text-gray-600">Top performer</div>
+              <div className="text-2xl font-bold text-gray-900">{aiAnalysis?.top_performer || 'N/A'}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -176,11 +273,11 @@ const AIAnalysis = () => {
           <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Chọn Cổ Phiếu & Thời Gian</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Chọn Cổ Phiếu</h3>
                 
                 {/* Stock Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {stocks.map(stock => (
+                  {topPerformers.map(stock => (
                     <button
                       key={stock.symbol}
                       onClick={() => setSelectedStock(stock.symbol)}
@@ -192,9 +289,11 @@ const AIAnalysis = () => {
                     >
                       <div className="text-center">
                         <div className="font-bold text-lg text-gray-900">{stock.symbol}</div>
-                        <div className="text-sm text-gray-600 mt-1">{stock.name}</div>
-                        <div className={`text-sm font-medium mt-2 ${stock.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {stock.change >= 0 ? '+' : ''}{stock.change}%
+                        <div className="text-sm text-gray-600 mt-1">{stock.company}</div>
+                        <div className={`text-sm font-medium mt-2 ${
+                          stock.predicted_change >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {formatPercent(stock.predicted_change)}
                         </div>
                       </div>
                     </button>
@@ -231,14 +330,14 @@ const AIAnalysis = () => {
               <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-bold text-gray-900">
-                    Dự Đoán AI: {selectedStock}
+                    Dự Đoán AI: {selectedStockData?.symbol || 'Chọn cổ phiếu'}
                   </h3>
                   <div className="text-sm text-gray-500">
-                    Mô hình: LSTM • Cập nhật: 5 phút trước
+                    Ngày phân tích: {aiAnalysis?.analysis_date || 'N/A'}
                   </div>
                 </div>
                 
-                {stockPrediction.symbol ? (
+                {selectedStockData ? (
                   <>
                     {/* Prediction Result */}
                     <div className="mb-8">
@@ -246,29 +345,26 @@ const AIAnalysis = () => {
                         <div>
                           <div className="text-sm text-gray-500">Giá hiện tại</div>
                           <div className="text-3xl font-bold text-gray-900 mt-1">
-                            ${stockPrediction.current_price?.toFixed(2)}
+                            {formatCurrency(selectedStockData.current_price)}
                           </div>
                         </div>
                         
                         <div className="text-right">
                           <div className="text-sm text-gray-500">Dự đoán {timeframe}</div>
                           <div className={`text-3xl font-bold mt-1 ${
-                            stockPrediction.prediction_trend === 'up' ? 'text-green-600' :
-                            stockPrediction.prediction_trend === 'down' ? 'text-red-600' :
-                            'text-yellow-600'
+                            selectedStockData.predicted_change >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            ${stockPrediction.predicted_price?.toFixed(2)}
+                            {formatCurrency(selectedStockData.predicted_price)}
                           </div>
                           <div className={`flex items-center text-sm font-medium ${
-                            stockPrediction.prediction_change >= 0 ? 'text-green-600' : 'text-red-600'
+                            selectedStockData.predicted_change >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            {stockPrediction.prediction_trend === 'up' ? (
+                            {selectedStockData.predicted_change >= 0 ? (
                               <ArrowTrendingUpIcon className="h-4 w-4 mr-1" />
-                            ) : stockPrediction.prediction_trend === 'down' ? (
+                            ) : (
                               <ArrowTrendingDownIcon className="h-4 w-4 mr-1" />
-                            ) : null}
-                            {stockPrediction.prediction_change >= 0 ? '+' : ''}
-                            {stockPrediction.prediction_change?.toFixed(2)}%
+                            )}
+                            {formatPercent(selectedStockData.predicted_change)}
                           </div>
                         </div>
                       </div>
@@ -278,31 +374,25 @@ const AIAnalysis = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <div className={`p-2 rounded-lg mr-3 ${
-                              stockPrediction.prediction_trend === 'up' ? 'bg-green-100' :
-                              stockPrediction.prediction_trend === 'down' ? 'bg-red-100' :
-                              'bg-yellow-100'
+                              selectedStockData.predicted_change >= 0 ? 'bg-green-100' : 'bg-red-100'
                             }`}>
-                              {stockPrediction.prediction_trend === 'up' ? (
+                              {selectedStockData.predicted_change >= 0 ? (
                                 <ArrowTrendingUpIcon className="h-5 w-5 text-green-600" />
-                              ) : stockPrediction.prediction_trend === 'down' ? (
-                                <ArrowTrendingDownIcon className="h-5 w-5 text-red-600" />
                               ) : (
-                                <ArrowsRightLeftIcon className="h-5 w-5 text-yellow-600" />
+                                <ArrowTrendingDownIcon className="h-5 w-5 text-red-600" />
                               )}
                             </div>
                             <div>
                               <div className="font-medium text-gray-900">Xu hướng dự đoán</div>
                               <div className="text-sm text-gray-600">
-                                {stockPrediction.prediction_trend === 'up' ? 'TĂNG MẠNH' :
-                                 stockPrediction.prediction_trend === 'down' ? 'GIẢM MẠNH' :
-                                 'ỔN ĐỊNH'}
+                                {selectedStockData.predicted_change >= 0 ? 'TĂNG GIÁ' : 'GIẢM GIÁ'}
                               </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm text-gray-500">Độ tin cậy</div>
+                            <div className="text-sm text-gray-500">Độ tin cậy AI</div>
                             <div className="text-xl font-bold text-blue-600">
-                              {stockPrediction.confidence}%
+                              {calculateConfidence(selectedStockData.predicted_change).toFixed(1)}%
                             </div>
                           </div>
                         </div>
@@ -313,7 +403,7 @@ const AIAnalysis = () => {
                         onClick={() => setShowModelDetails(!showModelDetails)}
                         className="w-full p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 flex items-center justify-between"
                       >
-                        <span className="font-medium">Chi tiết mô hình dự đoán</span>
+                        <span className="font-medium">Chi tiết phân tích</span>
                         {showModelDetails ? (
                           <ChevronUpIcon className="h-5 w-5" />
                         ) : (
@@ -325,43 +415,37 @@ const AIAnalysis = () => {
                         <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <div className="text-sm text-gray-500">Model sử dụng</div>
-                              <div className="font-medium">LSTM + XGBoost Ensemble</div>
+                              <div className="text-sm text-gray-500">Khuyến nghị</div>
+                              <div className={`font-medium ${
+                                getRecommendationClass(selectedStockData.predicted_change) === 'buy' ? 'text-green-600' :
+                                getRecommendationClass(selectedStockData.predicted_change) === 'sell' ? 'text-red-600' :
+                                'text-yellow-600'
+                              }`}>
+                                {getRecommendationClass(selectedStockData.predicted_change).toUpperCase()}
+                              </div>
                             </div>
                             <div>
-                              <div className="text-sm text-gray-500">Training period</div>
-                              <div className="font-medium">2 năm (2022-2024)</div>
+                              <div className="text-sm text-gray-500">Mức độ rủi ro</div>
+                              <div className="font-medium capitalize">{selectedStockData.risk_level || 'medium'}</div>
                             </div>
                             <div>
-                              <div className="text-sm text-gray-500">Features</div>
-                              <div className="font-medium">OHLC + Volume + RSI + MACD</div>
+                              <div className="text-sm text-gray-500">Công ty</div>
+                              <div className="font-medium">{selectedStockData.company}</div>
                             </div>
                             <div>
-                              <div className="text-sm text-gray-500">Last backtest</div>
-                              <div className="font-medium">Accuracy: 87.3%</div>
+                              <div className="text-sm text-gray-500">Trend</div>
+                              <div className="font-medium capitalize">{selectedStockData.trend || 'neutral'}</div>
                             </div>
                           </div>
                         </div>
                       )}
                     </div>
-                    
-                    {/* Backtest Chart */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-lg font-bold text-gray-900 mb-4">So Sánh Dự Đoán vs Thực Tế (Backtest)</h4>
-                      <div className="h-64 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg flex items-center justify-center">
-                        <div className="text-center">
-                          <ChartBarIcon className="h-12 w-12 text-blue-400 mx-auto mb-4" />
-                          <p className="text-gray-600">Biểu đồ backtest sẽ hiển thị tại đây</p>
-                          <p className="text-sm text-gray-500 mt-1">Dữ liệu từ MongoDB prediction collection</p>
-                        </div>
-                      </div>
-                    </div>
                   </>
                 ) : (
                   <div className="text-center py-12">
                     <BeakerIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">Chưa có dự đoán cho {selectedStock}</p>
-                    <p className="text-sm text-gray-500 mt-1">AI model đang xử lý dữ liệu mới nhất</p>
+                    <p className="text-gray-600">Chọn một cổ phiếu để xem dự đoán AI</p>
+                    <p className="text-sm text-gray-500 mt-1">Dữ liệu từ AI Analysis API</p>
                   </div>
                 )}
               </div>
@@ -369,80 +453,64 @@ const AIAnalysis = () => {
             
             {/* Right Column - Model Metrics */}
             <div className="space-y-6">
-              {/* Model Performance */}
+              {/* Market Trend */}
               <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <ShieldCheckIcon className="h-5 w-5 mr-2 text-blue-600" />
-                  Độ Tin Cậy Mô Hình
+                  <CpuChipIcon className="h-5 w-5 mr-2 text-blue-600" />
+                  Xu Hướng Thị Trường
                 </h3>
                 
                 <div className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm text-gray-600 mb-1">
-                      <span>Accuracy</span>
-                      <span>{modelMetrics.accuracy}%</span>
+                      <span>Trend chính</span>
+                      <span className={`font-medium ${getTrendClass(aiAnalysis?.market_trend)}`}>
+                        {aiAnalysis?.market_trend || 'neutral'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>Độ tin cậy</span>
+                      <span>{aiAnalysis?.confidence_score || 0}%</span>
                     </div>
                     <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-green-500" 
-                        style={{ width: `${modelMetrics.accuracy}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between text-sm text-gray-600 mb-1">
-                      <span>RMSE (Root Mean Square Error)</span>
-                      <span>{modelMetrics.rmse}</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500" 
-                        style={{ width: `${100 - (modelMetrics.rmse * 10)}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between text-sm text-gray-600 mb-1">
-                      <span>AUC-ROC Score</span>
-                      <span>{modelMetrics.auc_roc}</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-purple-500" 
-                        style={{ width: `${modelMetrics.auc_roc * 100}%` }}
+                        style={{ width: `${aiAnalysis?.confidence_score || 0}%` }}
                       />
                     </div>
                   </div>
                   
                   <div className="pt-4 border-t border-gray-200">
-                    <div className="text-sm text-gray-600">Overall Rating</div>
-                    <div className="text-2xl font-bold text-green-600">Excellent</div>
-                    <div className="text-xs text-gray-500">Dựa trên backtest 30 ngày</div>
+                    <div className="text-sm text-gray-600">Tổng cổ phiếu phân tích</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {(aiAnalysis?.bullish_count || 0) + (aiAnalysis?.bearish_count || 0)}
+                    </div>
                   </div>
                 </div>
               </div>
               
               {/* Quick Stats */}
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Thống Kê Nhanh</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thống Kê AI</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">156</div>
-                    <div className="text-sm text-gray-600">Dự đoán hôm nay</div>
+                    <div className="text-2xl font-bold text-blue-600">{stockPredictions.length}</div>
+                    <div className="text-sm text-gray-600">Cổ phiếu phân tích</div>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">87.5%</div>
-                    <div className="text-sm text-gray-600">Accuracy TB</div>
+                    <div className="text-2xl font-bold text-green-600">{aiAnalysis?.bullish_count || 0}</div>
+                    <div className="text-sm text-gray-600">Bullish</div>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-yellow-600">23</div>
-                    <div className="text-sm text-gray-600">Cảnh báo 24h</div>
+                    <div className="text-2xl font-bold text-red-600">{aiAnalysis?.bearish_count || 0}</div>
+                    <div className="text-sm text-gray-600">Bearish</div>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">1.2s</div>
-                    <div className="text-sm text-gray-600">Thời gian xử lý</div>
+                    <div className="text-2xl font-bold text-purple-600">{aiAnalysis?.top_performer || '-'}</div>
+                    <div className="text-sm text-gray-600">Top performer</div>
                   </div>
                 </div>
               </div>
@@ -453,34 +521,39 @@ const AIAnalysis = () => {
       
       {activeTab === 'portfolio' && (
         <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Đề Xuất Danh Mục Đầu Tư Thông Minh</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Đề Xuất Đầu Tư Thông Minh</h3>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* AI Portfolio Recommendations */}
             <div>
               <h4 className="text-lg font-bold text-gray-900 mb-4">Danh Mục AI Đề Xuất</h4>
               <div className="space-y-4">
-                {[
-                  { symbol: 'VNM', allocation: 25, reason: 'Blue-chip ổn định, dividend cao' },
-                  { symbol: 'FPT', allocation: 20, reason: 'Tăng trưởng mạnh, hợp đồng quốc tế' },
-                  { symbol: 'HPG', allocation: 18, reason: 'Ngành thép phục hồi' },
-                  { symbol: 'VCB', allocation: 15, reason: 'Ngân hàng dẫn đầu' },
-                  { symbol: 'MWG', allocation: 12, reason: 'Bán lẻ phục hồi' },
-                  { symbol: 'SSI', allocation: 10, reason: 'Hưởng lợi từ thị trường' },
-                ].map((stock, index) => (
+                {stockPredictions.slice(0, 6).map((stock, index) => (
                   <div key={index} className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center">
                         <div className="font-bold text-lg text-gray-900 mr-3">{stock.symbol}</div>
-                        <div className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
-                          {stock.allocation}%
+                        <div className={`px-2 py-1 rounded text-sm font-medium ${
+                          stock.predicted_change >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {formatPercent(stock.predicted_change)}
                         </div>
                       </div>
                       <div className="text-sm text-gray-600">
-                        Rating: <span className="font-medium text-green-600">BUY</span>
+                        Rating: <span className={`font-medium ${
+                          getRecommendationClass(stock.predicted_change) === 'buy' ? 'text-green-600' :
+                          getRecommendationClass(stock.predicted_change) === 'sell' ? 'text-red-600' :
+                          'text-yellow-600'
+                        }`}>
+                          {getRecommendationClass(stock.predicted_change).toUpperCase()}
+                        </span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600">{stock.reason}</p>
+                    <p className="text-sm text-gray-600">{stock.company}</p>
+                    <div className="flex justify-between text-sm text-gray-500 mt-2">
+                      <span>Giá hiện tại: {formatCurrency(stock.current_price)}</span>
+                      <span>Dự đoán: {formatCurrency(stock.predicted_price)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -495,7 +568,7 @@ const AIAnalysis = () => {
                     <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
                     <div>
                       <div className="font-medium text-green-800">Đa dạng hóa tốt</div>
-                      <div className="text-sm text-green-700">6 ngành khác nhau</div>
+                      <div className="text-sm text-green-700">{stockPredictions.length} cổ phiếu</div>
                     </div>
                   </div>
                 </div>
@@ -504,8 +577,10 @@ const AIAnalysis = () => {
                   <div className="flex items-center">
                     <CalculatorIcon className="h-5 w-5 text-blue-600 mr-2" />
                     <div>
-                      <div className="font-medium text-blue-800">Risk Score: 4.2/10</div>
-                      <div className="text-sm text-blue-700">Rủi ro thấp, phù hợp đầu tư dài hạn</div>
+                      <div className="font-medium text-blue-800">Tỷ lệ Bullish/Bearish</div>
+                      <div className="text-sm text-blue-700">
+                        {aiAnalysis?.bullish_count || 0}:{aiAnalysis?.bearish_count || 0}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -514,8 +589,8 @@ const AIAnalysis = () => {
                   <div className="flex items-center">
                     <ChartPieIcon className="h-5 w-5 text-purple-600 mr-2" />
                     <div>
-                      <div className="font-medium text-purple-800">Expected Return: 15-20%</div>
-                      <div className="text-sm text-purple-700">Trong 12 tháng tới</div>
+                      <div className="font-medium text-purple-800">Độ tin cậy trung bình</div>
+                      <div className="text-sm text-purple-700">{aiAnalysis?.confidence_score || 0}%</div>
                     </div>
                   </div>
                 </div>
@@ -528,124 +603,85 @@ const AIAnalysis = () => {
       {activeTab === 'alerts' && (
         <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-gray-900">Cảnh Báo AI Tự Động</h3>
+            <h3 className="text-xl font-bold text-gray-900">Cảnh Báo Rủi Ro</h3>
             <div className="text-sm text-gray-500">
-              Từ workflow n8n • Cập nhật real-time
+              Từ AI Analysis • Cập nhật real-time
             </div>
           </div>
           
-          <div className="space-y-4">
-            {alerts.map((alert) => (
-              <div 
-                key={alert.id} 
-                className={`p-4 rounded-lg border ${
-                  alert.type === 'high_volatility' ? 'bg-red-50 border-red-200' :
-                  alert.type === 'price_surge' ? 'bg-green-50 border-green-200' :
-                  'bg-yellow-50 border-yellow-200'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex items-start">
-                    <div className={`p-2 rounded-lg mr-3 ${
-                      alert.type === 'high_volatility' ? 'bg-red-100' :
-                      alert.type === 'price_surge' ? 'bg-green-100' :
-                      'bg-yellow-100'
-                    }`}>
-                      {alert.type === 'high_volatility' ? (
+          {riskAlerts.length > 0 ? (
+            <div className="space-y-4">
+              {riskAlerts.map((alert, index) => (
+                <div 
+                  key={index} 
+                  className="p-4 bg-red-50 rounded-lg border border-red-200"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start">
+                      <div className="p-2 rounded-lg mr-3 bg-red-100">
                         <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
-                      ) : alert.type === 'price_surge' ? (
-                        <ArrowTrendingUpIcon className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <BoltIcon className="h-5 w-5 text-blue-600" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900">{alert.title}</h4>
-                      <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                        <span>📊 {alert.symbol}</span>
-                        <span>⏰ {new Date(alert.timestamp).toLocaleTimeString()}</span>
-                        <span>⚡ {alert.confidence}% confidence</span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">Rủi ro: {alert.symbol} - {alert.company}</h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Phát hiện tin tức tiêu cực ({alert.news_count} bài)
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                          <span>📊 {alert.symbol}</span>
+                          <span>💰 {formatCurrency(alert.price)}</span>
+                          <span>⚠️ {alert.news_count} tin tức</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    alert.severity === 'high' ? 'bg-red-100 text-red-800' :
-                    alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-blue-100 text-blue-800'
-                  }`}>
-                    {alert.severity === 'high' ? 'CAO' : 
-                     alert.severity === 'medium' ? 'TRUNG BÌNH' : 'THẤP'}
+                    <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                      CAO
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <ShieldCheckIcon className="h-12 w-12 text-green-400 mx-auto mb-4" />
+              <p className="text-gray-600">Không có cảnh báo rủi ro nào</p>
+              <p className="text-sm text-gray-500 mt-1">Thị trường đang ổn định</p>
+            </div>
+          )}
         </div>
       )}
       
-      {activeTab === 'models' && (
+      {activeTab === 'news' && (
         <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Mô Hình AI & Workflow</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Tin Tức Tác Động Thị Trường</h3>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Workflow Diagram */}
-            <div>
-              <h4 className="text-lg font-bold text-gray-900 mb-4">Workflow n8n AI Prediction</h4>
-              <div className="space-y-4">
-                {[
-                  { step: 1, title: 'Schedule Trigger', desc: 'Chạy mỗi giờ', icon: ClockIcon, color: 'gray' },
-                  { step: 2, title: 'MongoDB Find', desc: 'Lấy 10 mã cổ phiếu gần nhất', icon: ChartBarIcon, color: 'green' },
-                  { step: 3, title: 'FastAPI /predict', desc: 'Gửi OHLC + Volume → nhận dự đoán', icon: BoltIcon, color: 'blue' },
-                  { step: 4, title: 'Function Node', desc: 'Tính chênh lệch predicted vs actual', icon: CalculatorIcon, color: 'purple' },
-                  { step: 5, title: 'IF Condition', desc: 'Nếu chênh lệch > 2% → cảnh báo', icon: ExclamationTriangleIcon, color: 'red' },
-                  { step: 6, title: 'Telegram Bot', desc: 'Gửi cảnh báo real-time', icon: CheckCircleIcon, color: 'cyan' },
-                  { step: 7, title: 'MongoDB Insert', desc: 'Lưu vào collection prediction', icon: ChartBarIcon, color: 'green' },
-                ].map((item) => (
-                  <div key={item.step} className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <div className={`p-3 rounded-lg mr-4 bg-${item.color}-100`}>
-                      <item.icon className={`h-6 w-6 text-${item.color}-600`} />
-                    </div>
+          {aiAnalysis?.news_impact && aiAnalysis.news_impact.length > 0 ? (
+            <div className="space-y-4">
+              {aiAnalysis.news_impact.map((news, index) => (
+                <div key={index} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex items-start">
+                    <NewspaperIcon className="h-5 w-5 text-gray-400 mt-1 mr-3 flex-shrink-0" />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">{item.title}</div>
-                      <div className="text-sm text-gray-600">{item.desc}</div>
+                      <h4 className="font-medium text-gray-900 mb-2">{news.title}</h4>
+                      <a 
+                        href={news.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        Xem bài viết →
+                      </a>
                     </div>
-                    <div className="text-sm text-gray-500">Step {item.step}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Model Architecture */}
-            <div>
-              <h4 className="text-lg font-bold text-gray-900 mb-4">Kiến Trúc Mô Hình AI</h4>
-              <div className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
-                  <h5 className="font-bold text-gray-900 mb-2">📊 LSTM Model</h5>
-                  <ul className="space-y-2 text-sm text-gray-700">
-                    <li>• 3 LSTM layers (128, 64, 32 units)</li>
-                    <li>• Dropout: 0.2 để tránh overfitting</li>
-                    <li>• Dense output layer với activation linear</li>
-                    <li>• Training data: 70% train, 15% validation, 15% test</li>
-                    <li>• Loss function: Mean Squared Error</li>
-                    <li>• Optimizer: Adam (learning rate: 0.001)</li>
-                  </ul>
-                </div>
-                
-                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg">
-                  <h5 className="font-bold text-gray-900 mb-2">📈 Feature Engineering</h5>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="p-2 bg-white rounded">OHLC Prices</div>
-                    <div className="p-2 bg-white rounded">Volume</div>
-                    <div className="p-2 bg-white rounded">RSI (14)</div>
-                    <div className="p-2 bg-white rounded">MACD</div>
-                    <div className="p-2 bg-white rounded">Bollinger Bands</div>
-                    <div className="p-2 bg-white rounded">Moving Averages</div>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-12">
+              <NewspaperIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">Chưa có dữ liệu tin tức</p>
+              <p className="text-sm text-gray-500 mt-1">Dữ liệu sẽ được cập nhật từ n8n workflow</p>
+            </div>
+          )}
         </div>
       )}
     </div>
